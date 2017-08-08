@@ -1,0 +1,1724 @@
+	
+    //デバッグのためのInput
+    void DebugInput(int userConstraint)
+    {
+        if (Input.GetKey(KeyCode.LeftArrow))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 1.0f);
+        }
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            furniture[userConstraint].transform.localPosition += new Vector3(1.0f, 0.0f, 0.0f);
+        }
+        if (Input.GetMouseButton(1))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 5.0f);
+        }
+    }
+
+    //ユーザー指定の家具を見つける
+    void findUserConstraintFurniture(ref int userConstraint)
+    {
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (furniture[i].GetComponent<dragdrop>().startSimulation)
+            {
+                Debug.Log("No." + i);
+                userConstraint = i;
+            }
+        }
+        //Debug.Log("userConstraint = " + userConstraint);
+    }
+
+    //引越し前のローカルな位置や角度に変換
+    void setBeforeLocalPositionAndOrientation(int userConstraint, List<Vector3> beforeGlobalTrans, List<float> beforeGlobalOrientation, ref List<Vector3> beforeLocalTrans, ref List<float> beforeLocalOrientation)
+    {
+        //「引越し前」の指定した家具のローカル座標を定義する
+        Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, beforeGlobalOrientaion[userConstraint]);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 beforeLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 beforeLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+        //引越し前のローカルな位置
+        beforeLocalTrans = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            beforeLocalTrans.Add(new Vector3(Vector3.Dot(beforeLocalU, (beforeGlobalTrans[i] - beforeGlobalTrans[userConstraint])), Vector3.Dot(beforeLocalV, (beforeGlobalTrans[i] - beforeGlobalTrans[userConstraint])), 0.0f));
+        }
+
+        List<Vector3> beforeLocalFrontVector = new List<Vector3>();
+        //「引越し前」の家具の正面ベクトル
+        beforeLocalOrientaion = new List<float>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            rotation = Quaternion.Euler(0.0f, 0.0f, beforeGlobalOrientaion[i]);
+            m = Matrix4x4.identity;
+            m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+            Vector3 beforeGlobalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+            beforeLocalFrontVector.Add(new Vector3(Vector3.Dot(beforeLocalU, beforeGlobalFrontVector), Vector3.Dot(beforeLocalV, beforeGlobalFrontVector), 0.0f));
+            float theta = Mathf.Acos(Vector3.Dot(beforeLocalFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+            if (beforeLocalFrontVector[i].x > 0)
+            {
+                theta = 360 - theta;
+            }
+            beforeLocalOrientaion.Add(theta);
+        }
+    }
+
+    //引越し後のグローバルな位置と角度に変換
+    void setAfterGlobalPositionAndOrientaion(ref List<GameObject> furniture, ref List<Vector3> a, ref List<float> atheta, int userConstraint)
+    {
+        //座標戻す
+        //「引越し後」の指定した家具のローカル座標
+        Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+        int ai = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i == userConstraint)
+            {
+                furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+            }
+            else
+            {
+                furniture[i].transform.localPosition =
+                    furniture[userConstraint].transform.localPosition + a[ai].x * afterLocalU + a[ai].y * afterLocalV;
+                ai++;
+            }
+        }
+
+        ////角度戻す
+        int aii = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i == userConstraint)
+            {
+                furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles;
+            }
+            else
+            {
+                furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, atheta[aii] + furniture[userConstraint].transform.localEulerAngles.z);
+                aii++;
+            }
+        }
+    }
+
+    //ローカルな位置や角度に変換
+    void setLocalPositionAndOrientation(int userConstraint, List<GameObject> furniture, ref List<Vector3> localTrans, ref List<float> localOrientation)
+    {
+        //「引越し前」の指定した家具のローカル座標を定義する
+        Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 localU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 localV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+        //引越し前のローカルな位置
+        localTrans = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            localTrans.Add(new Vector3(Vector3.Dot(localU, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), Vector3.Dot(localV, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), 0.0f));
+        }
+
+        List<Vector3> localFrontVector = new List<Vector3>();
+        //「引越し前」の家具の正面ベクトル
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            rotation = Quaternion.Euler(0.0f, 0.0f, furniture[i].transform.localEulerAngles.z);
+            m = Matrix4x4.identity;
+            m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+            Vector3 globalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+            localFrontVector.Add(new Vector3(Vector3.Dot(localU, globalFrontVector), Vector3.Dot(localV, globalFrontVector), 0.0f));
+            float theta = Mathf.Acos(Vector3.Dot(localFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+            if (localFrontVector[i].x > 0)
+            {
+                theta = 360 - theta;
+            }
+            localOrientation.Add(theta);
+        }
+    }
+
+    //グローバルな位置と角度に変換
+    void setAfterGlobalPositionAndOrientaion(ref List<GameObject> furniture, ref List<Vector3> a, ref List<float> atheta, int userConstraint, List<int> furnitureOutsideTheWall)
+    {
+        //座標戻す
+        //「引越し後」の指定した家具のローカル座標
+        Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+        //int ai = 0;
+        //for (int i = 0; i < furniture.Count; i++)
+        //{
+        //    if (i == userConstraint)
+        //    {
+        //        furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+        //        i++;
+        //    }
+        //    for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //    {
+        //        if (i == furnitureOutsideTheWall[j])
+        //        {
+        //            furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+        //            i++;
+        //        }
+        //    }
+        //    furniture[i].transform.localPosition =
+        //            furniture[userConstraint].transform.localPosition + a[ai].x * afterLocalU + a[ai].y * afterLocalV;
+        //    ai++;
+        //}
+
+        ////角度戻す
+        //int aii = 0;
+        //for (int i = 0; i < furniture.Count; i++)
+        //{
+        //    if (i == userConstraint)
+        //    {
+        //        furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles;
+        //    }
+        //    else
+        //    {
+        //        furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, atheta[aii] + furniture[userConstraint].transform.localEulerAngles.z);
+        //        aii++;
+        //    }
+        //}
+    }
+
+    //行列計算して引越し後のレイアウトを計算
+    void calcAfterPositionAndOrientation(ref List<GameObject> furniture, int userConstraint)
+    {
+        List<Vector3> vectorBeforeLocalF = new List<Vector3>();
+        Vector3 temp;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            temp = new Vector3();
+            for (int j = 0; j < furniture.Count; j++)
+            {
+                temp += (beforeLocalTrans[i] - beforeLocalTrans[j]);
+            }
+            vectorBeforeLocalF.Add(temp);
+        }
+
+        //引越し前の家具のローカルな角度
+        List<float> vectorBeforeLocalTheta = new List<float>();
+        float tempTheta;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            tempTheta = 0.0f;
+            for (int j = 0; j < furniture.Count; j++)
+            {
+                tempTheta += (beforeLocalOrientaion[i] - beforeLocalOrientaion[j]);
+            }
+            vectorBeforeLocalTheta.Add(tempTheta);
+        }
+
+        //行列計算
+        List<Vector3> a, b;
+        a = new List<Vector3>(); b = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i != userConstraint)
+            {
+                b.Add(vectorBeforeLocalF[i]);
+            }
+        }
+        for (int i = 0; i < b.Count; i++)
+        {
+            //自作逆行列MatBInverseで計算
+            a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        }
+
+        //行列計算
+        List<float> atheta = new List<float>(), btheta = new List<float>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i != userConstraint)
+            {
+                btheta.Add(vectorBeforeLocalTheta[i]);
+            }
+        }
+        for (int i = 0; i < btheta.Count; i++)
+        {
+            //自作逆行列を使って実装
+            atheta.Add(matAInverse[i, 0] * btheta[0] + matAInverse[i, 1] * btheta[1] + matAInverse[i, 2] * btheta[2] + matAInverse[i, 3] * btheta[3]);
+        }
+
+        //一度グローバルに戻す
+        setAfterGlobalPositionAndOrientaion(ref furniture, ref a, ref atheta, userConstraint);
+
+        //壁にはみ出した家具があるかチェックする
+        furnitureOutsideTheWall = new List<int>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if(roomMinX > furniture[i].transform.localPosition.x || roomMaxX < furniture[i].transform.localPosition.x
+                || roomMinY > furniture[i].transform.localPosition.y || roomMaxY < furniture[i].transform.localPosition.y)
+            {
+                //Debug.Log("はみ出した家具 = " + i);
+                furnitureOutsideTheWall.Add(i);
+            }
+        }
+        Debug.Log("はみ出し家具数 = " + furnitureOutsideTheWall.Count);
+
+        ////もしはみ出した家具があればそれを壁に修正して再行列計算
+        //int N = furniture.Count - furnitureOutsideTheWall.Count - 1;
+        //if (furnitureOutsideTheWall.Count > 0 && N > -1)
+        //{
+        //    matB = new float[N, N]; matBInverse = new float[N, N];
+        //    for (int i = 0; i < N; i++)
+        //    {
+        //        for (int j = 0; j < N; j++)
+        //        {
+        //            matB[i, j] = -1.0f;
+        //            if (i == j)
+        //            {
+        //                matB[i, j] = furniture.Count - 1.0f;
+        //            }
+        //        }
+        //    }
+        //    MyMatrix matrixManager = new MyMatrix();
+        //    matrixManager.getInverseMatrix(N, matB, ref matBInverse);
+
+        //    //はみ出した家具を修正したglobal座標をローカルに変えて
+        //    List<int> nearWallID = new List<int>();
+        //    int min_id = new int();
+        //    float mindistance = float.MaxValue, distance;
+        //    for (int i = 0; i < furnitureOutsideTheWall.Count; i++)
+        //    {
+        //        for (int j = 0; j < room.cornerPoint.Count; j++)
+        //        {
+        //            float d, pij, pij1; Vector3 AB, AP;
+        //            AP = furniture[furnitureOutsideTheWall[i]].transform.localPosition - room.cornerPoint[j];
+        //            if (j + 1 >= room.cornerPoint.Count) { AB = room.cornerPoint[0] - room.cornerPoint[j]; }
+        //            else { AB = room.cornerPoint[j + 1] - room.cornerPoint[j]; }
+        //            d = Vector3.Cross(AP, AB).magnitude / AB.magnitude;
+        //            pij = Vector3.Distance(room.cornerPoint[j], furniture[furnitureOutsideTheWall[i]].transform.localPosition);
+        //            if (j + 1 >= room.cornerPoint.Count) { pij1 = Vector3.Distance(room.cornerPoint[0], furniture[furnitureOutsideTheWall[i]].transform.localPosition); }
+        //            else{ pij1 = Vector3.Distance(room.cornerPoint[j + 1], furniture[furnitureOutsideTheWall[i]].transform.localPosition); }
+
+        //            float t = Vector3.Dot(AP, AB.normalized) / AB.magnitude;
+        //            if (0 < t && t < 1)
+        //            {
+        //                distance = d;
+        //            }else
+        //            {
+        //                if(pij< pij1) { distance = pij; }
+        //                else { distance = pij1; }
+        //            }
+
+        //            if(distance < mindistance)
+        //            {
+        //                mindistance = distance;
+        //                min_id = j;
+        //            }
+        //        }
+        //        nearWallID.Add(min_id);
+        //    }
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                if (nearWallID[j] == 0) {
+        //                    furniture[i].transform.localPosition = new Vector3(room.cornerPoint[0].x, furniture[i].transform.localPosition.y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 90.0f);
+        //                }
+        //                else if (nearWallID[j] == 1) {
+        //                    furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[1].y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 0.0f);
+        //                }
+        //                else if (nearWallID[j] == 2) {
+        //                    furniture[i].transform.localPosition = new Vector3(room.cornerPoint[2].x, furniture[i].transform.localPosition.y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 270.0f);
+        //                }
+        //                else {
+        //                    furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[3].y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 180.0f);
+        //                }
+        //            }
+        //        }
+        //    }
+        //    List<Vector3> localTrans = new List<Vector3>();
+        //    List<float> localOrientation = new List<float>();
+        //    setLocalPositionAndOrientation(userConstraint, furniture, ref localTrans, ref localOrientation);
+        //    Vector3 tempLocalTrans = new Vector3();
+        //    float tempLocalOrientation = new float();
+        //    for (int i = 0; i < furnitureOutsideTheWall.Count; i++)
+        //    {
+        //        tempLocalTrans += localTrans[furnitureOutsideTheWall[i]];
+        //        tempLocalOrientation += localOrientation[furnitureOutsideTheWall[i]];
+        //    }
+
+        //    //行列計算
+        //    a = new List<Vector3>(); b = new List<Vector3>();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (i == userConstraint)
+        //        {
+        //            i++;
+        //        }
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                i++;
+        //            }
+        //        }
+        //        if (i >= furniture.Count)
+        //        {
+        //            break;
+        //        }
+        //        b.Add(vectorBeforeLocalF[i] + tempLocalTrans);
+        //    }
+        //    if(N == b.Count)
+        //    {
+        //        for (int i = 0; i < b.Count; i++)
+        //        {
+        //            //自作逆行列MatBInverseで計算
+        //            //a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        //            Vector3 aTemp = new Vector3();
+        //            for (int j = 0; j < b.Count; j++)
+        //            {
+        //                aTemp += matBInverse[i, j] * b[j];
+        //            }
+        //            a.Add(aTemp);
+        //        }
+        //    }
+
+        //    //行列計算
+        //    atheta = new List<float>(); btheta = new List<float>();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (i == userConstraint)
+        //        {
+        //            i++;
+        //        }
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                i++;
+        //            }
+        //        }
+        //        if (i >= furniture.Count)
+        //        {
+        //            break;
+        //        }
+        //        btheta.Add(vectorBeforeLocalTheta[i] + tempLocalOrientation);
+        //    }
+        //    if (N == btheta.Count)
+        //    {
+        //        for (int i = 0; i < btheta.Count; i++)
+        //        {
+        //            //自作逆行列MatBInverseで計算
+        //            //a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        //            float athetaTemp = new float();
+        //            for (int j = 0; j < b.Count; j++)
+        //            {
+        //                athetaTemp += matBInverse[i, j] * btheta[j];
+        //            }
+        //            atheta.Add(athetaTemp);
+        //        }
+        //    }
+        //    int aaa = 0;
+
+        //    if (N == atheta.Count)
+        //    {
+        //        setAfterGlobalPositionAndOrientaion(ref furniture, ref a, ref atheta, userConstraint, furnitureOutsideTheWall);
+        //    }
+        //}
+
+    }
+
+
+	using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Main : MonoBehaviour {
+    //クラス化　家具をすべて扱う
+    public FurnitureManager furnitureManager;
+
+    //家具，ユーザー指定の家具のindex
+    public List<GameObject> furniture;  //引越し後の位置と回転も含む
+    public int userConstraint;          //ユーザー指定の家具
+    public List<int> furnitureOutsideTheWall; //壁から出た家具
+    public List<int> state;             //家具の状態(ユーザー指定＝１，壁にくっつく＝２)
+
+    //位置
+    public List<Vector3> beforeGlobalTrans;
+    public List<Vector3> beforeLocalTrans;
+
+    //回転
+    public List<float> beforeGlobalOrientaion;
+    public List<float> beforeLocalOrientaion;
+
+    //行列演算のための変数
+    public MyMatrix matrixManager;
+    float[,] matA, matAInverse;
+    float[,] matB, matBInverse;
+
+    //部屋情報
+    Room room;
+    float roomMaxX = 350.0f; float roomMinX = -350.0f;
+    float roomMaxY = 180.0f; float roomMinY = -180.0f;
+
+    // Use this for initialization
+    void Start () {
+        furnitureManager = new FurnitureManager();
+
+        GameObject[] tagobjs = GameObject.FindGameObjectsWithTag("GUI");
+        for (int i = 0; i < tagobjs.Length; i++){ furniture.Add(tagobjs[i]); }
+        Debug.Log("Num of Furniture = " + furniture.Count);
+
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            beforeGlobalTrans.Add(furniture[i].transform.localPosition);
+            beforeGlobalOrientaion.Add(furniture[i].transform.localEulerAngles.z);
+        }
+
+        ////////////逆行列テスト////////////
+        int N = 4;
+        matA = new float[4,4]{
+            {4.0f,-1.0f,-1.0f,-1.0f},
+            {-1.0f,4.0f,-1.0f,-1.0f},
+            {-1.0f,-1.0f,4.0f,-1.0f},
+            {-1.0f,-1.0f,-1.0f,4.0f}
+        };
+        matAInverse = new float[N,N];
+        matrixManager = new MyMatrix(furnitureManager.furniture.Count);
+        matrixManager.getInverseMatrix(N, matA, ref matAInverse);
+        matrixManager.getInverseMatrix(furnitureManager.furniture.Count - 1, matrixManager.matA, ref matrixManager.matAInverse);
+        ///////////////////////////////////
+
+        //部屋情報格納
+        List<Vector3> p = new List<Vector3>();
+        p.Add(new Vector3(roomMaxX, roomMaxY, 0.0f)); p.Add(new Vector3(roomMaxX, roomMinY, 0.0f));
+        p.Add(new Vector3(roomMinX, roomMinY, 0.0f)); p.Add(new Vector3(roomMinX, roomMaxY, 0.0f));
+        room = new Room(p);
+
+    }
+	
+    //デバッグのためのInput
+    void DebugInput(int userConstraint)
+    {
+        if (Input.GetKey(KeyCode.LeftArrow))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 1.0f);
+        }
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            furniture[userConstraint].transform.localPosition += new Vector3(1.0f, 0.0f, 0.0f);
+        }
+        if (Input.GetMouseButton(1))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 5.0f);
+        }
+    }
+
+    //ユーザー指定の家具を見つける
+    void findUserConstraintFurniture(ref int userConstraint)
+    {
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (furniture[i].GetComponent<dragdrop>().startSimulation)
+            {
+                Debug.Log("No." + i);
+                userConstraint = i;
+            }
+        }
+        //Debug.Log("userConstraint = " + userConstraint);
+    }
+
+    //引越し前のローカルな位置や角度に変換
+    void setBeforeLocalPositionAndOrientation(int userConstraint, List<Vector3> beforeGlobalTrans, List<float> beforeGlobalOrientation, ref List<Vector3> beforeLocalTrans, ref List<float> beforeLocalOrientation)
+    {
+        //「引越し前」の指定した家具のローカル座標を定義する
+        Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, beforeGlobalOrientaion[userConstraint]);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 beforeLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 beforeLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+        //引越し前のローカルな位置
+        beforeLocalTrans = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            beforeLocalTrans.Add(new Vector3(Vector3.Dot(beforeLocalU, (beforeGlobalTrans[i] - beforeGlobalTrans[userConstraint])), Vector3.Dot(beforeLocalV, (beforeGlobalTrans[i] - beforeGlobalTrans[userConstraint])), 0.0f));
+        }
+
+        List<Vector3> beforeLocalFrontVector = new List<Vector3>();
+        //「引越し前」の家具の正面ベクトル
+        beforeLocalOrientaion = new List<float>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            rotation = Quaternion.Euler(0.0f, 0.0f, beforeGlobalOrientaion[i]);
+            m = Matrix4x4.identity;
+            m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+            Vector3 beforeGlobalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+            beforeLocalFrontVector.Add(new Vector3(Vector3.Dot(beforeLocalU, beforeGlobalFrontVector), Vector3.Dot(beforeLocalV, beforeGlobalFrontVector), 0.0f));
+            float theta = Mathf.Acos(Vector3.Dot(beforeLocalFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+            if (beforeLocalFrontVector[i].x > 0)
+            {
+                theta = 360 - theta;
+            }
+            beforeLocalOrientaion.Add(theta);
+        }
+    }
+
+    //引越し後のグローバルな位置と角度に変換
+    void setAfterGlobalPositionAndOrientaion(ref List<GameObject> furniture, ref List<Vector3> a, ref List<float> atheta, int userConstraint)
+    {
+        //座標戻す
+        //「引越し後」の指定した家具のローカル座標
+        Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+        int ai = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i == userConstraint)
+            {
+                furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+            }
+            else
+            {
+                furniture[i].transform.localPosition =
+                    furniture[userConstraint].transform.localPosition + a[ai].x * afterLocalU + a[ai].y * afterLocalV;
+                ai++;
+            }
+        }
+
+        ////角度戻す
+        int aii = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i == userConstraint)
+            {
+                furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles;
+            }
+            else
+            {
+                furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, atheta[aii] + furniture[userConstraint].transform.localEulerAngles.z);
+                aii++;
+            }
+        }
+    }
+
+    //ローカルな位置や角度に変換
+    void setLocalPositionAndOrientation(int userConstraint, List<GameObject> furniture, ref List<Vector3> localTrans, ref List<float> localOrientation)
+    {
+        //「引越し前」の指定した家具のローカル座標を定義する
+        Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 localU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 localV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+        //引越し前のローカルな位置
+        localTrans = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            localTrans.Add(new Vector3(Vector3.Dot(localU, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), Vector3.Dot(localV, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), 0.0f));
+        }
+
+        List<Vector3> localFrontVector = new List<Vector3>();
+        //「引越し前」の家具の正面ベクトル
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            rotation = Quaternion.Euler(0.0f, 0.0f, furniture[i].transform.localEulerAngles.z);
+            m = Matrix4x4.identity;
+            m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+            Vector3 globalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+            localFrontVector.Add(new Vector3(Vector3.Dot(localU, globalFrontVector), Vector3.Dot(localV, globalFrontVector), 0.0f));
+            float theta = Mathf.Acos(Vector3.Dot(localFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+            if (localFrontVector[i].x > 0)
+            {
+                theta = 360 - theta;
+            }
+            localOrientation.Add(theta);
+        }
+    }
+
+    //グローバルな位置と角度に変換
+    void setAfterGlobalPositionAndOrientaion(ref List<GameObject> furniture, ref List<Vector3> a, ref List<float> atheta, int userConstraint, List<int> furnitureOutsideTheWall)
+    {
+        //座標戻す
+        //「引越し後」の指定した家具のローカル座標
+        Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+        //int ai = 0;
+        //for (int i = 0; i < furniture.Count; i++)
+        //{
+        //    if (i == userConstraint)
+        //    {
+        //        furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+        //        i++;
+        //    }
+        //    for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //    {
+        //        if (i == furnitureOutsideTheWall[j])
+        //        {
+        //            furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+        //            i++;
+        //        }
+        //    }
+        //    furniture[i].transform.localPosition =
+        //            furniture[userConstraint].transform.localPosition + a[ai].x * afterLocalU + a[ai].y * afterLocalV;
+        //    ai++;
+        //}
+
+        ////角度戻す
+        //int aii = 0;
+        //for (int i = 0; i < furniture.Count; i++)
+        //{
+        //    if (i == userConstraint)
+        //    {
+        //        furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles;
+        //    }
+        //    else
+        //    {
+        //        furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, atheta[aii] + furniture[userConstraint].transform.localEulerAngles.z);
+        //        aii++;
+        //    }
+        //}
+    }
+
+    //行列計算して引越し後のレイアウトを計算
+    void calcAfterPositionAndOrientation(ref List<GameObject> furniture, int userConstraint)
+    {
+        List<Vector3> vectorBeforeLocalF = new List<Vector3>();
+        Vector3 temp;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            temp = new Vector3();
+            for (int j = 0; j < furniture.Count; j++)
+            {
+                temp += (beforeLocalTrans[i] - beforeLocalTrans[j]);
+            }
+            vectorBeforeLocalF.Add(temp);
+        }
+
+        //引越し前の家具のローカルな角度
+        List<float> vectorBeforeLocalTheta = new List<float>();
+        float tempTheta;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            tempTheta = 0.0f;
+            for (int j = 0; j < furniture.Count; j++)
+            {
+                tempTheta += (beforeLocalOrientaion[i] - beforeLocalOrientaion[j]);
+            }
+            vectorBeforeLocalTheta.Add(tempTheta);
+        }
+
+        //行列計算
+        List<Vector3> a, b;
+        a = new List<Vector3>(); b = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i != userConstraint)
+            {
+                b.Add(vectorBeforeLocalF[i]);
+            }
+        }
+        for (int i = 0; i < b.Count; i++)
+        {
+            //自作逆行列MatBInverseで計算
+            a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        }
+
+        //行列計算
+        List<float> atheta = new List<float>(), btheta = new List<float>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i != userConstraint)
+            {
+                btheta.Add(vectorBeforeLocalTheta[i]);
+            }
+        }
+        for (int i = 0; i < btheta.Count; i++)
+        {
+            //自作逆行列を使って実装
+            atheta.Add(matAInverse[i, 0] * btheta[0] + matAInverse[i, 1] * btheta[1] + matAInverse[i, 2] * btheta[2] + matAInverse[i, 3] * btheta[3]);
+        }
+
+        //一度グローバルに戻す
+        setAfterGlobalPositionAndOrientaion(ref furniture, ref a, ref atheta, userConstraint);
+
+        //壁にはみ出した家具があるかチェックする
+        furnitureOutsideTheWall = new List<int>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if(roomMinX > furniture[i].transform.localPosition.x || roomMaxX < furniture[i].transform.localPosition.x
+                || roomMinY > furniture[i].transform.localPosition.y || roomMaxY < furniture[i].transform.localPosition.y)
+            {
+                //Debug.Log("はみ出した家具 = " + i);
+                furnitureOutsideTheWall.Add(i);
+            }
+        }
+        Debug.Log("はみ出し家具数 = " + furnitureOutsideTheWall.Count);
+
+        ////もしはみ出した家具があればそれを壁に修正して再行列計算
+        //int N = furniture.Count - furnitureOutsideTheWall.Count - 1;
+        //if (furnitureOutsideTheWall.Count > 0 && N > -1)
+        //{
+        //    matB = new float[N, N]; matBInverse = new float[N, N];
+        //    for (int i = 0; i < N; i++)
+        //    {
+        //        for (int j = 0; j < N; j++)
+        //        {
+        //            matB[i, j] = -1.0f;
+        //            if (i == j)
+        //            {
+        //                matB[i, j] = furniture.Count - 1.0f;
+        //            }
+        //        }
+        //    }
+        //    MyMatrix matrixManager = new MyMatrix();
+        //    matrixManager.getInverseMatrix(N, matB, ref matBInverse);
+
+        //    //はみ出した家具を修正したglobal座標をローカルに変えて
+        //    List<int> nearWallID = new List<int>();
+        //    int min_id = new int();
+        //    float mindistance = float.MaxValue, distance;
+        //    for (int i = 0; i < furnitureOutsideTheWall.Count; i++)
+        //    {
+        //        for (int j = 0; j < room.cornerPoint.Count; j++)
+        //        {
+        //            float d, pij, pij1; Vector3 AB, AP;
+        //            AP = furniture[furnitureOutsideTheWall[i]].transform.localPosition - room.cornerPoint[j];
+        //            if (j + 1 >= room.cornerPoint.Count) { AB = room.cornerPoint[0] - room.cornerPoint[j]; }
+        //            else { AB = room.cornerPoint[j + 1] - room.cornerPoint[j]; }
+        //            d = Vector3.Cross(AP, AB).magnitude / AB.magnitude;
+        //            pij = Vector3.Distance(room.cornerPoint[j], furniture[furnitureOutsideTheWall[i]].transform.localPosition);
+        //            if (j + 1 >= room.cornerPoint.Count) { pij1 = Vector3.Distance(room.cornerPoint[0], furniture[furnitureOutsideTheWall[i]].transform.localPosition); }
+        //            else{ pij1 = Vector3.Distance(room.cornerPoint[j + 1], furniture[furnitureOutsideTheWall[i]].transform.localPosition); }
+
+        //            float t = Vector3.Dot(AP, AB.normalized) / AB.magnitude;
+        //            if (0 < t && t < 1)
+        //            {
+        //                distance = d;
+        //            }else
+        //            {
+        //                if(pij< pij1) { distance = pij; }
+        //                else { distance = pij1; }
+        //            }
+
+        //            if(distance < mindistance)
+        //            {
+        //                mindistance = distance;
+        //                min_id = j;
+        //            }
+        //        }
+        //        nearWallID.Add(min_id);
+        //    }
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                if (nearWallID[j] == 0) {
+        //                    furniture[i].transform.localPosition = new Vector3(room.cornerPoint[0].x, furniture[i].transform.localPosition.y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 90.0f);
+        //                }
+        //                else if (nearWallID[j] == 1) {
+        //                    furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[1].y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 0.0f);
+        //                }
+        //                else if (nearWallID[j] == 2) {
+        //                    furniture[i].transform.localPosition = new Vector3(room.cornerPoint[2].x, furniture[i].transform.localPosition.y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 270.0f);
+        //                }
+        //                else {
+        //                    furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[3].y, 0.0f);
+        //                    furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 180.0f);
+        //                }
+        //            }
+        //        }
+        //    }
+        //    List<Vector3> localTrans = new List<Vector3>();
+        //    List<float> localOrientation = new List<float>();
+        //    setLocalPositionAndOrientation(userConstraint, furniture, ref localTrans, ref localOrientation);
+        //    Vector3 tempLocalTrans = new Vector3();
+        //    float tempLocalOrientation = new float();
+        //    for (int i = 0; i < furnitureOutsideTheWall.Count; i++)
+        //    {
+        //        tempLocalTrans += localTrans[furnitureOutsideTheWall[i]];
+        //        tempLocalOrientation += localOrientation[furnitureOutsideTheWall[i]];
+        //    }
+
+        //    //行列計算
+        //    a = new List<Vector3>(); b = new List<Vector3>();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (i == userConstraint)
+        //        {
+        //            i++;
+        //        }
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                i++;
+        //            }
+        //        }
+        //        if (i >= furniture.Count)
+        //        {
+        //            break;
+        //        }
+        //        b.Add(vectorBeforeLocalF[i] + tempLocalTrans);
+        //    }
+        //    if(N == b.Count)
+        //    {
+        //        for (int i = 0; i < b.Count; i++)
+        //        {
+        //            //自作逆行列MatBInverseで計算
+        //            //a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        //            Vector3 aTemp = new Vector3();
+        //            for (int j = 0; j < b.Count; j++)
+        //            {
+        //                aTemp += matBInverse[i, j] * b[j];
+        //            }
+        //            a.Add(aTemp);
+        //        }
+        //    }
+
+        //    //行列計算
+        //    atheta = new List<float>(); btheta = new List<float>();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (i == userConstraint)
+        //        {
+        //            i++;
+        //        }
+        //        for (int j = 0; j < furnitureOutsideTheWall.Count; j++)
+        //        {
+        //            if (i == furnitureOutsideTheWall[j])
+        //            {
+        //                i++;
+        //            }
+        //        }
+        //        if (i >= furniture.Count)
+        //        {
+        //            break;
+        //        }
+        //        btheta.Add(vectorBeforeLocalTheta[i] + tempLocalOrientation);
+        //    }
+        //    if (N == btheta.Count)
+        //    {
+        //        for (int i = 0; i < btheta.Count; i++)
+        //        {
+        //            //自作逆行列MatBInverseで計算
+        //            //a.Add(matAInverse[i, 0] * b[0] + matAInverse[i, 1] * b[1] + matAInverse[i, 2] * b[2] + matAInverse[i, 3] * b[3]);
+        //            float athetaTemp = new float();
+        //            for (int j = 0; j < b.Count; j++)
+        //            {
+        //                athetaTemp += matBInverse[i, j] * btheta[j];
+        //            }
+        //            atheta.Add(athetaTemp);
+        //        }
+        //    }
+        //    int aaa = 0;
+
+        //    if (N == atheta.Count)
+        //    {
+        //        setAfterGlobalPositionAndOrientaion(ref furniture, ref a, ref atheta, userConstraint, furnitureOutsideTheWall);
+        //    }
+        //}
+
+    }
+
+    // Update is called once per frame
+    void Update () {
+        furnitureManager.findUserConstraint();
+        furnitureManager.transformGlobalToLocalTranslationAndOrientation(furnitureManager.beforeGlobalTrans, furnitureManager.beforeGlobalOrientaion, ref furnitureManager.beforeLocalTrans, ref furnitureManager.beforeLocalOrientaion);
+        furnitureManager.calcAfterGlobalTranslationAndOrientation(matrixManager, room);
+        furnitureManager.DebugInput();
+
+
+        /////////////////////////////////////////////////////////////////////
+        //findUserConstraintFurniture(ref userConstraint);
+        //setBeforeLocalPositionAndOrientation(userConstraint, beforeGlobalTrans, beforeGlobalOrientaion, ref beforeLocalTrans, ref beforeLocalOrientaion);
+
+        //calcAfterPositionAndOrientation(ref furniture, userConstraint);
+
+        //DebugInput(userConstraint);
+        int aa = 0;
+
+    }
+}
+
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
+6月30日12時21分バックアップFurnitureManager.cs
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class FurnitureManager : MonoBehaviour {
+    //家具のオブジェクト
+    public List<GameObject> furniture;
+    //家具の状態(壁に張り付く＝１)
+    public List<int> state;
+    public int userConstraint;
+
+    //位置
+    public List<Vector3> beforeGlobalTrans;
+    public List<Vector3> beforeLocalTrans;
+
+    //回転
+    public List<float> beforeGlobalOrientaion;
+    public List<float> beforeLocalOrientaion;
+
+    public FurnitureManager()
+    {
+        furniture = new List<GameObject>(); state = new List<int>();
+        beforeGlobalTrans = new List<Vector3>(); beforeGlobalOrientaion = new List<float>();
+        GameObject[] tagobjs = GameObject.FindGameObjectsWithTag("GUI");
+        for (int i = 0; i < tagobjs.Length; i++) { furniture.Add(tagobjs[i]); }
+        Debug.Log("Num of Furniture = " + furniture.Count);
+
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            beforeGlobalTrans.Add(furniture[i].transform.localPosition);
+            beforeGlobalOrientaion.Add(furniture[i].transform.localEulerAngles.z);
+            state.Add(0);
+        }
+
+        beforeLocalTrans = new List<Vector3>();
+        beforeLocalOrientaion = new List<float>();
+    }
+
+    public void findUserConstraint()
+    {
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (furniture[i].GetComponent<dragdrop>().startSimulation)
+            {
+                Debug.Log("Constraint = No." + i);
+                userConstraint = i;
+            }
+        }
+    }
+
+    public void transformGlobalToLocalTranslationAndOrientation(List<Vector3> globalTrans, List<float> globalOrientation, ref List<Vector3> localTrans, ref List<float> localOrientation)
+    {
+        //「引越し前」の指定した家具のローカル座標を定義する
+        Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, beforeGlobalOrientaion[userConstraint]);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 localU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 localV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+        //引越し前のローカルな位置
+        localTrans = new List<Vector3>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            //localTrans.Add(new Vector3(Vector3.Dot(localU, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), Vector3.Dot(localV, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), 0.0f));
+            localTrans.Add(new Vector3(Vector3.Dot(localU, (globalTrans[i] - globalTrans[userConstraint])), Vector3.Dot(localV, (globalTrans[i] - globalTrans[userConstraint])), 0.0f));
+        }
+
+        List<Vector3> localFrontVector = new List<Vector3>();
+        //ここメモリ危ない．．．苦肉の策　下でif文で切った．．．
+        localOrientation = new List<float>();
+        //「引越し前」の家具の正面ベクトル
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            rotation = Quaternion.Euler(0.0f, 0.0f, furniture[i].transform.localEulerAngles.z);
+            m = Matrix4x4.identity;
+            m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+            Vector3 globalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+            localFrontVector.Add(new Vector3(Vector3.Dot(localU, globalFrontVector), Vector3.Dot(localV, globalFrontVector), 0.0f));
+            float theta = Mathf.Acos(Vector3.Dot(localFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+            if (localFrontVector[i].x > 0)
+            {
+                theta = 360.0f - theta;
+            }
+            //if (localOrientation.Count < furniture.Count)
+            //{
+                localOrientation.Add(theta);
+            //}
+            //localOrientation.Add(theta);
+        }
+        int aaa = 0;
+    }
+
+    //public void transformGlobalToLocalTranslationAndOrientation(ref List<Vector3> localTrans, ref List<float> localOrientation)
+    //{
+    //    //「引越し前」の指定した家具のローカル座標を定義する
+    //    Quaternion rotation = Quaternion.Euler(0.0f, 0.0f, furniture[userConstraint].transform.localEulerAngles.z);
+    //    Matrix4x4 m = Matrix4x4.identity;
+    //    m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+    //    Vector3 localU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+    //    Vector3 localV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+    //    //引越し前のローカルな位置
+    //    localTrans = new List<Vector3>();
+    //    for (int i = 0; i < furniture.Count; i++)
+    //    {
+    //        localTrans.Add(new Vector3(Vector3.Dot(localU, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), Vector3.Dot(localV, (furniture[i].transform.localPosition - furniture[userConstraint].transform.localPosition)), 0.0f));
+    //        //localTrans.Add(new Vector3(Vector3.Dot(localU, (globalTrans[i] - globalTrans[userConstraint])), Vector3.Dot(localV, (globalTrans[i] - globalTrans[userConstraint])), 0.0f));
+    //    }
+
+    //    List<Vector3> localFrontVector = new List<Vector3>();
+    //    //ここメモリ危ない．．．苦肉の策　下でif文で切った．．．
+    //    localOrientation = new List<float>();
+    //    //「引越し前」の家具の正面ベクトル
+    //    for (int i = 0; i < furniture.Count; i++)
+    //    {
+    //        rotation = Quaternion.Euler(0.0f, 0.0f, furniture[i].transform.localEulerAngles.z);
+    //        m = Matrix4x4.identity;
+    //        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+    //        Vector3 globalFrontVector = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+    //        localFrontVector.Add(new Vector3(Vector3.Dot(localU, globalFrontVector), Vector3.Dot(localV, globalFrontVector), 0.0f));
+    //        float theta = Mathf.Acos(Vector3.Dot(localFrontVector[i], new Vector3(0.0f, 1.0f, 0.0f))) * 180.0f / Mathf.PI;
+    //        if (localFrontVector[i].x > 0)
+    //        {
+    //            theta = 360.0f - theta;
+    //        }
+    //        //if (localOrientation.Count < furniture.Count)
+    //        //{
+    //            localOrientation.Add(theta);
+    //        //}
+    //        int aaaa = 0;
+    //    }
+    //}
+
+    public void transformLocalToGlobalTranslationAndOrientation(List<Vector3> transCalculatedByMatrix, List<float> OrientationCaluculatedByMatrix)
+    {
+        //座標戻す
+        //「引越し後」の指定した家具のローカル座標
+        Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+        Matrix4x4 m = Matrix4x4.identity;
+        m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+        Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+        Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+        int ai = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i==userConstraint /*|| state[i] != 0*/)
+            {
+                furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+                furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles; 
+            }
+            else
+            {
+                furniture[i].transform.localPosition = 
+                    furniture[userConstraint].transform.localPosition + transCalculatedByMatrix[ai].x * afterLocalU + transCalculatedByMatrix[ai].y * afterLocalV;
+                furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, OrientationCaluculatedByMatrix[ai] + furniture[userConstraint].transform.localEulerAngles.z);
+                ai++;
+            }
+        }
+
+        int a = 0;
+    }
+
+    //public void transformLocalToGlobalTranslationAndOrientation(List<int> nearWallID, List<Vector3> transCalculatedByMatrix, List<float> OrientationCaluculatedByMatrix)
+    //{
+    //    //座標戻す
+    //    //「引越し後」の指定した家具のローカル座標
+    //    Quaternion rotation = Quaternion.Euler(furniture[userConstraint].transform.localEulerAngles.x, furniture[userConstraint].transform.localEulerAngles.y, furniture[userConstraint].transform.localEulerAngles.z);
+    //    Matrix4x4 m = Matrix4x4.identity;
+    //    m.SetTRS(new Vector3(0.0f, 0.0f, 0.0f), rotation, new Vector3(1.0f, 1.0f, 1.0f));
+    //    Vector3 afterLocalU = m.MultiplyPoint3x4(new Vector3(1.0f, 0.0f, 0.0f));
+    //    Vector3 afterLocalV = m.MultiplyPoint3x4(new Vector3(0.0f, 1.0f, 0.0f));
+
+    //    int ai = 0;
+    //    for (int i = 0; i < furniture.Count; i++)
+    //    {
+    //        if (i == userConstraint || nearWallID[i] != -1)
+    //        {
+    //            furniture[i].transform.localPosition = furniture[i].transform.localPosition;
+    //            furniture[i].transform.localEulerAngles = furniture[i].transform.localEulerAngles;
+    //        }
+    //        else
+    //        {
+    //            furniture[i].transform.localPosition =
+    //                furniture[userConstraint].transform.localPosition + transCalculatedByMatrix[ai].x * afterLocalU + transCalculatedByMatrix[ai].y * afterLocalV;
+    //            furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, OrientationCaluculatedByMatrix[ai] + furniture[userConstraint].transform.localEulerAngles.z);
+    //            ai++;
+    //        }
+    //    }
+    //}
+
+    //デバッグのためのInput
+    public void DebugInput()
+    {
+        if (Input.GetKey(KeyCode.LeftArrow))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 1.0f);
+        }
+        if (Input.GetKey(KeyCode.RightArrow))
+        {
+            furniture[userConstraint].transform.localPosition += new Vector3(1.0f, 0.0f, 0.0f);
+        }
+        if (Input.GetMouseButton(1))
+        {
+            furniture[userConstraint].transform.localEulerAngles += new Vector3(0.0f, 0.0f, 5.0f);
+        }
+    }
+
+    public void calcAfterGlobalTranslationAndOrientation(MyMatrix matrixManager, Room room)
+    {
+        //行列の右辺
+        List<Vector3> vectorBeforeLocalF = new List<Vector3>();
+        List<float> vectorBeforeLocalTheta = new List<float>();
+        Vector3 temp; float tempTheta;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            temp = new Vector3();
+            tempTheta = 0.0f;
+            for (int j = 0; j < furniture.Count; j++)
+            {
+                temp += (beforeLocalTrans[i] - beforeLocalTrans[j]);
+                tempTheta += (beforeLocalOrientaion[i] - beforeLocalOrientaion[j]);
+            }
+            vectorBeforeLocalF.Add(temp);
+            vectorBeforeLocalTheta.Add(tempTheta);
+        }
+
+        //行列計算
+        List<Vector3> a = new List<Vector3>(), b = new List<Vector3>();
+        List<float> atheta = new List<float>(), btheta = new List<float>();
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            if (i != userConstraint)
+            {
+                b.Add(vectorBeforeLocalF[i]);
+                btheta.Add(vectorBeforeLocalTheta[i]);
+            }
+        }
+        for (int i = 0; i < b.Count; i++)
+        {
+            //自作逆行列を使って実装
+            a.Add(matrixManager.matAInverse[i, 0] * b[0] + matrixManager.matAInverse[i, 1] * b[1] + matrixManager.matAInverse[i, 2] * b[2] + matrixManager.matAInverse[i, 3] * b[3]);
+            atheta.Add(matrixManager.matAInverse[i, 0] * btheta[0] + matrixManager.matAInverse[i, 1] * btheta[1] + matrixManager.matAInverse[i, 2] * btheta[2] + matrixManager.matAInverse[i, 3] * btheta[3]);
+        }
+
+        int aa = 0;
+
+        //一度グローバルに戻す
+        transformLocalToGlobalTranslationAndOrientation(a,atheta);
+
+        //壁にはみ出した家具があるかチェックする
+        int numOfOutFurniture = detectionInsideorNot(room);
+
+        ////もしはみ出した家具があればそれを壁に修正して再行列計算
+        //int N = furniture.Count - numOfOutFurniture - 1;
+        //if (numOfOutFurniture > 0 && N > -1)
+        //{
+        //    matrixManager.matB = new float[N, N]; matrixManager.matBInverse = new float[N, N];
+        //    for (int i = 0; i < N; i++)
+        //    {
+        //        for (int j = 0; j < N; j++)
+        //        {
+        //            matrixManager.matB[i, j] = -1.0f;
+        //            if (i == j)
+        //            {
+        //                matrixManager.matB[i, j] = furniture.Count - 1.0f;
+        //            }
+        //        }
+        //    }
+        //    matrixManager.getInverseMatrix(N, matrixManager.matB, ref matrixManager.matBInverse);
+
+        //    //はみ出した家具を修正したglobal座標をローカルに変えて
+        //    List<int> nearWallID = new List<int>();
+        //    int min_id = new int();
+        //    float mindistance = float.MaxValue, distance;
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (state[i] != 0)
+        //        {
+        //            for (int j = 0; j < room.cornerPoint.Count; j++)
+        //            {
+        //                float d, pij, pij1; Vector3 AB, AP;
+        //                AP = furniture[i].transform.localPosition - room.cornerPoint[j];
+        //                if (j + 1 >= room.cornerPoint.Count) { AB = room.cornerPoint[0] - room.cornerPoint[j]; }
+        //                else { AB = room.cornerPoint[j + 1] - room.cornerPoint[j]; }
+        //                d = Vector3.Cross(AP, AB).magnitude / AB.magnitude;
+        //                pij = Vector3.Distance(room.cornerPoint[j], furniture[i].transform.localPosition);
+        //                if (j + 1 >= room.cornerPoint.Count) { pij1 = Vector3.Distance(room.cornerPoint[0], furniture[i].transform.localPosition); }
+        //                else { pij1 = Vector3.Distance(room.cornerPoint[j + 1], furniture[i].transform.localPosition); }
+
+        //                float t = Vector3.Dot(AP, AB.normalized) / AB.magnitude;
+        //                if (0 < t && t < 1){ distance = d; }
+        //                else{
+        //                    if (pij < pij1) { distance = pij; }
+        //                    else { distance = pij1; }
+        //                }
+
+        //                if (distance < mindistance)
+        //                {
+        //                    mindistance = distance;
+        //                    min_id = j;
+        //                }
+        //            }
+        //            nearWallID.Add(min_id);
+        //        }
+        //        else
+        //        {
+        //            nearWallID.Add(-1);
+        //        }
+        //    }
+
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+
+        //        if (nearWallID[i] == 0)
+        //        {
+        //            furniture[i].transform.localPosition = new Vector3(room.cornerPoint[0].x, furniture[i].transform.localPosition.y, 0.0f);
+        //            furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 90.0f);
+        //        }
+        //        if (nearWallID[i] == 1)
+        //        {
+        //            furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[1].y, 0.0f);
+        //            furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 0.0f);
+        //        }
+        //        if (nearWallID[i] == 2)
+        //        {
+        //            furniture[i].transform.localPosition = new Vector3(room.cornerPoint[2].x, furniture[i].transform.localPosition.y, 0.0f);
+        //            furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 270.0f);
+        //        }
+        //        if (nearWallID[i] == 3)
+        //        {
+        //            furniture[i].transform.localPosition = new Vector3(furniture[i].transform.localPosition.x, room.cornerPoint[3].y, 0.0f);
+        //            furniture[i].transform.localEulerAngles = new Vector3(0.0f, 0.0f, 180.0f);
+        //        }
+        //    }
+
+
+        //    List<Vector3> localTrans = new List<Vector3>();
+        //    List<float> localOrientation = new List<float>();
+        //    transformGlobalToLocalTranslationAndOrientation(ref localTrans, ref localOrientation);
+        //    Vector3 tempLocalTrans = new Vector3();
+        //    float tempLocalOrientation = new float();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (nearWallID[i] != -1)
+        //        {
+        //            tempLocalTrans += localTrans[i];
+        //            tempLocalOrientation += localOrientation[i];
+        //        }
+        //    }
+
+        //    //行列計算
+        //    a = new List<Vector3>(); b = new List<Vector3>();
+        //    atheta = new List<float>(); btheta = new List<float>();
+        //    for (int i = 0; i < furniture.Count; i++)
+        //    {
+        //        if (i != userConstraint && nearWallID[i] == -1)
+        //        {
+        //            b.Add(vectorBeforeLocalF[i] + tempLocalTrans);
+        //            btheta.Add(vectorBeforeLocalTheta[i] + tempLocalOrientation);
+        //        }
+        //    }
+
+        //    if (N == b.Count)
+        //    {
+        //       for (int i = 0; i < b.Count; i++)
+        //        {
+        //            Vector3 aTemp = new Vector3();
+        //            float athetaTemp = 0.0f;
+        //            for (int j = 0; j < b.Count; j++)
+        //            {
+        //                aTemp += matrixManager.matBInverse[i, j] * b[j];
+        //                athetaTemp += matrixManager.matBInverse[i, j] * btheta[j];
+        //            }
+        //            a.Add(aTemp);
+        //            atheta.Add(athetaTemp);
+        //        }
+        //        transformLocalToGlobalTranslationAndOrientation(nearWallID, a, atheta);
+        //    }
+ 
+        //}
+    }
+
+    int detectionInsideorNot(Room room)
+    {
+        int num = 0;
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            float deg = 0.0f;
+            for (int j = 0; j < room.cornerPoint.Count; j++)
+            {
+                Vector3 p1, p2;
+                p1 = room.cornerPoint[j] - furniture[i].transform.localPosition;
+                if (j + 1 >= room.cornerPoint.Count) { p2 = room.cornerPoint[0] - furniture[i].transform.localPosition; }
+                else { p2 = room.cornerPoint[j + 1] - furniture[i].transform.localPosition; }
+
+                float cos = Vector3.Dot(p1, p2) / (p1.magnitude*p2.magnitude);
+                deg += Mathf.Acos(cos) * 180.0f / Mathf.PI;
+            }
+            //内側判定
+            if (359 < deg && deg < 361){ state[i] = 0; }
+            //外側判定
+            else{ state[i] = 1; num++; }
+        }
+        return num;
+    }
+
+}
+//////////////////////////////////////////////////////////////////////////////////////////
+2017/07/06 dragdrop.cs
+using UnityEngine;
+using System.Collections;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections.Generic;
+
+public class dragdrop : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IPointerClickHandler, IPointerDownHandler
+{
+    static Transform TargetGUI;
+    public bool startSimulation;
+    static public Vector3 oldPos;
+    static public Vector3 newPos;
+
+
+    void Start()
+    {
+        startSimulation = false;
+    }
+
+    void Update()
+    {
+        if (Input.GetMouseButtonDown(1))
+        {
+            if (TargetGUI != null)
+            {
+                oldPos = Input.mousePosition;
+            }
+        }
+
+        if (Input.GetMouseButton(1) )
+        {
+            if (TargetGUI != null)
+            {
+
+                Vector3 bdiff = (oldPos - TargetGUI.position).normalized;
+                Vector3 adiff = (Input.mousePosition - TargetGUI.position).normalized;
+
+                float S = bdiff.x * adiff.y - bdiff.y * adiff.x;
+                if (S >= 0) { TargetGUI.transform.localEulerAngles += new Vector3(0.0f, 0.0f, 0.7f); }
+                else { TargetGUI.transform.localEulerAngles -= new Vector3(0.0f, 0.0f, 0.7f); }
+
+                //float btheta, atheta, bdot, adot;
+                //bdot = Vector3.Dot(bdiff, new Vector3(1.0f, 0.0f, 0.0f));
+                //adot = Vector3.Dot(adiff, new Vector3(1.0f, 0.0f, 0.0f));
+                //if(bdot <= -1.0f) { bdot = -1.0f; }
+                //else if(bdot >= 1.0f) { bdot = 1.0f; }
+                //if(adot <= -1.0f) { adot = -1.0f; }
+                //else if(adot >= 1.0f) { adot = 1.0f; }
+                //btheta = Mathf.Acos(bdot) * 180.0f / Mathf.PI;
+                //atheta = Mathf.Acos(adot) * 180.0f / Mathf.PI;
+                //if(Mathf.Abs(atheta-btheta) >= 10.0f)
+                //{
+                //    TargetGUI.transform.localEulerAngles = new Vector3(0.0f, 0.0f, (atheta - btheta));
+                //}
+
+            }
+        }
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if(this.tag == "GUI")
+        {
+            this.GetComponent<Image>().color = new Color(Color.white.r, Color.white.g, Color.white.b, Color.white.a / 3.0f);
+            this.tag = "Selected";
+        }
+        else
+        {
+            this.GetComponent<Image>().color = Color.white;
+            this.tag = "GUI";
+        }
+
+        TargetGUI = searchGUI(eventData.pointerPressRaycast.gameObject.transform);
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        //TargetGUI = searchGUI(eventData.pointerPressRaycast.gameObject.transform);
+        //startSimulation = true;
+        oldPos = Input.mousePosition;
+        //this.tag = "Selected";
+        //this.GetComponent<Image>().color = new Color(Color.white.r, Color.white.g, Color.white.b, Color.white.a / 3.0f);
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        //startSimulation = true;
+        TargetGUI = searchGUI(eventData.pointerPressRaycast.gameObject.transform);
+        oldPos = Input.mousePosition;   
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (TargetGUI != null)
+        {
+            TargetGUI.position = eventData.position;
+        }
+        startSimulation = true;    
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        startSimulation = false;
+        //this.GetComponent<Image>().color = Color.white;
+        //this.tag = "GUI";
+    }
+
+    private Transform searchGUI(Transform P_transform)
+    {
+        //if (P_transform.gameObject.CompareTag("GUI"))
+        if(P_transform.gameObject.CompareTag("Selected"))
+        {
+            
+            return P_transform;
+        }
+        if (P_transform == P_transform.root)
+        {
+            return null;
+        }
+        return searchGUI(P_transform.parent);
+    }
+
+}
+//////////////////////////////////////////////////////////////////////////
+2017/07/13 dragdrop.cs
+
+using UnityEngine;
+using System.Collections;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using System.Collections.Generic;
+
+public class dragdrop : MonoBehaviour, 
+    IBeginDragHandler, IDragHandler, IEndDragHandler, 
+    IPointerClickHandler, IPointerDownHandler
+{
+    static Transform TargetGUI;
+    public bool startSimulation;
+    static public Vector3 oldPos;
+    static public Vector3 newPos;
+    public Slider slider;
+
+    bool onDraging;
+
+    public bool wallFurniture;
+    public bool bedFurniture;
+
+    void Start()
+    {
+        startSimulation = false;
+        onDraging = false;
+        //slider.gameObject.SetActive(false);
+    }
+
+    void Update()
+    {
+        //slider.gameObject.transform.position = this.transform.position + new Vector3(0.0f, 40.0f, 0.0f);
+        //slider.gameObject.transform.eulerAngles = new Vector3(0.0f, 0.0f, 0.0f);
+        //if (Input.GetMouseButtonDown(1))
+        //{
+        //    if (TargetGUI != null)
+        //    {
+        //        oldPos = Input.mousePosition;
+        //    }
+        //}
+
+        //if (Input.GetMouseButton(1) )
+        //{
+        //    if (TargetGUI != null)
+        //    {
+
+        //        Vector3 bdiff = (oldPos - TargetGUI.position).normalized;
+        //        Vector3 adiff = (Input.mousePosition - TargetGUI.position).normalized;
+
+        //        float S = bdiff.x * adiff.y - bdiff.y * adiff.x;
+        //        if (S >= 0) { TargetGUI.transform.localEulerAngles += new Vector3(0.0f, 0.0f, 0.7f); }
+        //        else { TargetGUI.transform.localEulerAngles -= new Vector3(0.0f, 0.0f, 0.7f); }
+
+        //        //float btheta, atheta, bdot, adot;
+        //        //bdot = Vector3.Dot(bdiff, new Vector3(1.0f, 0.0f, 0.0f));
+        //        //adot = Vector3.Dot(adiff, new Vector3(1.0f, 0.0f, 0.0f));
+        //        //if(bdot <= -1.0f) { bdot = -1.0f; }
+        //        //else if(bdot >= 1.0f) { bdot = 1.0f; }
+        //        //if(adot <= -1.0f) { adot = -1.0f; }
+        //        //else if(adot >= 1.0f) { adot = 1.0f; }
+        //        //btheta = Mathf.Acos(bdot) * 180.0f / Mathf.PI;
+        //        //atheta = Mathf.Acos(adot) * 180.0f / Mathf.PI;
+        //        //if(Mathf.Abs(atheta-btheta) >= 10.0f)
+        //        //{
+        //        //    TargetGUI.transform.localEulerAngles = new Vector3(0.0f, 0.0f, (atheta - btheta));
+        //        //}
+
+        //    }
+        //}
+
+        if (slider.IsActive() == true)
+        {
+            MoveSlider();
+        }
+
+    }
+
+    public void OnPointerClick(PointerEventData eventData)
+    {
+        if (!onDraging)
+        {
+            if (this.tag == "GUI")
+            {
+                this.GetComponent<Image>().color = new Color(Color.white.r, Color.white.g, Color.white.b, Color.white.a / 3.0f);
+                this.tag = "Selected";
+            }
+            else if (this.tag == "Selected")
+            {
+                this.GetComponent<Image>().color = Color.white;
+                this.tag = "GUI";
+            }
+        }
+        onDraging = false;
+    }
+
+    public void OnPointerDown(PointerEventData eventData)
+    {
+        oldPos = Input.mousePosition;
+    }
+
+    public void OnBeginDrag(PointerEventData eventData)
+    {
+        TargetGUI = searchGUI(eventData.pointerPressRaycast.gameObject.transform);
+        oldPos = Input.mousePosition;   
+    }
+
+    public void OnDrag(PointerEventData eventData)
+    {
+        if (TargetGUI != null)
+        {
+            TargetGUI.position = eventData.position;
+        }
+        startSimulation = true;
+        onDraging = true;
+        slider.gameObject.SetActive(false);
+    }
+
+    public void OnEndDrag(PointerEventData eventData)
+    {
+        startSimulation = false;
+        slider.gameObject.SetActive(true);
+        slider.transform.localPosition = this.transform.localPosition + new Vector3(0.0f, 40.0f, 0.0f);
+        slider.value = 1.0f - this.transform.eulerAngles.z / 360.0f;
+    }
+
+    private Transform searchGUI(Transform P_transform)
+    {
+        if(P_transform.gameObject.CompareTag("Selected") || P_transform.gameObject.CompareTag("GUI"))
+        {
+            return P_transform;
+        }
+        if (P_transform == P_transform.root)
+        {
+            return null;
+        }
+        return searchGUI(P_transform.parent);
+    }
+
+    public void MoveSlider()
+    {
+        //Debug.Log(value_slider.value);
+        float value = slider.value;
+        if (value > 0.05 && value < 0.14) { value = 0.125f; }
+        if (value > 0.17 && value < 0.33) { value = 0.25f; }
+        if (value > 0.30 && value < 0.40) { value = 0.375f; }
+        if (value > 0.42 && value < 0.58) { value = 0.5f; }
+        if (value > 0.59 && value < 0.66) { value = 0.625f; }
+        if (value > 0.67 && value < 0.83) { value = 0.75f; }
+        if (value > 0.84 && value < 0.90) { value = 0.875f; }
+        if (TargetGUI != null)
+        {
+            TargetGUI.eulerAngles = new Vector3(0.0f, 0.0f, -360.0f * value);
+        }
+    }
+
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////
+Furniture3Dmode.cs 2017/07/18
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class Furniture3DViewer : MonoBehaviour {
+    public Main main;
+    public List<GameObject> furniture;
+    public UIScript uiScript;
+    private Vector3[] trans;
+    private float[] rotation;
+
+	// Use this for initialization
+	void Start () {
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            furniture[i].SetActive(false);
+        }
+        trans = new Vector3[furniture.Count];
+        rotation = new float[furniture.Count];
+	}
+	
+	// Update is called once per frame
+	void Update () {
+
+        //for (int i = 0; i < furniture.Count; i++)
+        //{
+        //    for (int j = 0; j < main.furnitureManager.furniture.Count; j++)
+        //    {
+        //        if (furniture[i].name == main.furnitureManager.furniture[j].name)
+        //        {
+        //            furniture[i].SetActive(true);
+        //            Vector3 position = main.furnitureManager.furniture[j].transform.localPosition / 15.0f;
+        //            float orientation = -main.furnitureManager.furniture[j].transform.localEulerAngles.z;
+        //            furniture[i].transform.position = new Vector3(position.x, position.z, position.y);
+        //            furniture[i].transform.eulerAngles = new Vector3(0.0f, orientation, 0.0f);
+        //        }
+        //    }
+        //}
+
+        if (uiScript.view2Dmode)
+        {
+            for (int i = 0; i < furniture.Count; i++)
+            {
+                string name = furniture[i].name;
+                GameObject model = GameObject.Find(name);
+                furniture[i].SetActive(true);
+                trans[i] = model.transform.localPosition / 15.0f;
+                rotation[i] = -model.transform.localEulerAngles.z;
+                //Vector3 position = model.transform.localPosition / 15.0f;
+                //float orientation = -model.transform.localEulerAngles.z;
+                //furniture[i].transform.position = new Vector3(position.x, position.z, position.y);
+                //furniture[i].transform.eulerAngles = new Vector3(0.0f, orientation, 0.0f);
+            }
+        }
+
+
+        for (int i = 0; i < furniture.Count; i++)
+        {
+            furniture[i].transform.position = new Vector3(trans[i].x, trans[i].z, trans[i].y);
+            furniture[i].transform.eulerAngles = new Vector3(0.0f, rotation[i], 0.0f);
+        }
+
+
+
+    }
+}

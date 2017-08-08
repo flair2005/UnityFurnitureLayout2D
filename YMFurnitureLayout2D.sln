@@ -1,0 +1,26 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2015
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YMFurnitureLayout2D.CSharp", "YMFurnitureLayout2D.CSharp.csproj", "{B6932B63-3999-8C65-B2AF-00FD3C017873}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YMFurnitureLayout2D.CSharp.Editor", "YMFurnitureLayout2D.CSharp.Editor.csproj", "{98627830-AE03-C28D-6189-629DCF697603}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B6932B63-3999-8C65-B2AF-00FD3C017873}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B6932B63-3999-8C65-B2AF-00FD3C017873}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B6932B63-3999-8C65-B2AF-00FD3C017873}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B6932B63-3999-8C65-B2AF-00FD3C017873}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98627830-AE03-C28D-6189-629DCF697603}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98627830-AE03-C28D-6189-629DCF697603}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98627830-AE03-C28D-6189-629DCF697603}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98627830-AE03-C28D-6189-629DCF697603}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
